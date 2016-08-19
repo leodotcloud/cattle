@@ -15,4 +15,7 @@ public class NetworkConstants {
     public static final String KIND_NETWORK = "network";
     public static final String KIND_VIP_NETWORK = "vipNetwork";
 
+    public static final String LABEL_NETWORK_PLUGIN = "io.rancher.network.plugin";
+
+    public static final String NETWORK_PLUGIN_KIND_RANCHER_CNI = "rancher-cni";
 }

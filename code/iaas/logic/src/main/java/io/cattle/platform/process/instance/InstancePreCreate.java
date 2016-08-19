@@ -5,6 +5,7 @@ import static io.cattle.platform.docker.constants.DockerInstanceConstants.*;
 
 import io.cattle.platform.core.addon.LogConfig;
 import io.cattle.platform.core.constants.AgentConstants;
+import io.cattle.platform.core.constants.NetworkConstants;
 import io.cattle.platform.core.constants.InstanceConstants;
 import io.cattle.platform.core.constants.NetworkConstants;
 import io.cattle.platform.core.model.Instance;
@@ -34,9 +35,14 @@ import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import com.google.common.base.Joiner;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Named
 public class InstancePreCreate extends AbstractObjectProcessLogic implements ProcessPreListener, Priority {
+
+	private static final Logger log = LoggerFactory.getLogger(InstancePreCreate.class);
+
     @Inject
     JsonMapper jsonMapper;
 
@@ -79,6 +85,11 @@ public class InstancePreCreate extends AbstractObjectProcessLogic implements Pro
     protected void setNetworkMode(Instance instance, Map<String, Object> labels, Map<Object, Object> data) {
         if (BooleanUtils.toBoolean(toString(labels.get(LABEL_RANCHER_NETWORK)))) {
             data.put(FIELD_NETWORK_MODE, DockerNetworkConstants.NETWORK_MODE_MANAGED);
+        }
+        String networkPlugin = toString(labels.get(NetworkConstants.LABEL_NETWORK_PLUGIN));
+        if (networkPlugin != null && !networkPlugin.equals(NetworkConstants.NETWORK_PLUGIN_KIND_RANCHER_CNI)) {
+            log.debug("networkPlugin: " + networkPlugin);
+            data.put(FIELD_NETWORK_MODE, DockerNetworkConstants.NETWORK_MODE_BRIDGE);
         }
     }
 
