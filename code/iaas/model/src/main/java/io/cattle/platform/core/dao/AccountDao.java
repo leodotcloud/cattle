@@ -22,4 +22,10 @@ public interface AccountDao {
     boolean isActiveAccount(Account account);
 
     List<String> getAccountActiveStates();
+
+    void generateAccountLinks(Account account, List<? extends Long> links);
+
+    // links for the accounts linked to target account both ways
+    List<Long> getLinkedAccounts(long accountId);
+
 }

@@ -613,7 +613,8 @@ def test_project_auth(admin_user_client, user_client, service_client,
         'projectTemplateId': 'cr',
         'orchestration': 'r',
         'version': 'r',
-        'defaultNetworkId': 'r'
+        'defaultNetworkId': 'r',
+        'accountLinks': 'cru',
     })
 
     auth_check(user_client.schema, 'project', 'crud', {
@@ -643,7 +644,7 @@ def test_project_auth(admin_user_client, user_client, service_client,
         'projectTemplateId': 'r',
         'orchestration': 'r',
         'version': 'r',
-        'defaultNetworkId': 'r'
+        'defaultNetworkId': 'r',
     })
 
     auth_check(service_client.schema, 'project', 'cr', {
@@ -657,7 +658,8 @@ def test_project_auth(admin_user_client, user_client, service_client,
         'projectTemplateId': 'cr',
         'orchestration': 'r',
         'version': 'r',
-        'defaultNetworkId': 'r'
+        'defaultNetworkId': 'r',
+        'accountLinks': 'cr',
     })
 
 
@@ -1494,7 +1496,8 @@ def test_account_auth(admin_user_client, user_client, project_client):
         'data': 'r',
         'kind': 'cru',
         'version': 'r',
-        'uuid': 'cr'
+        'uuid': 'cr',
+        'accountLinks': 'cru',
     })
 
     auth_check(user_client.schema, 'account', 'r', {
@@ -1896,7 +1899,7 @@ def test_svc_discovery_service(admin_user_client, user_client, project_client,
         'selectorLink': 'cru',
         'selectorContainer': 'cru',
         'fqdn': 'r',
-        'publicEndpoints': 'r',
+        'publicEndpoints': 'cru',
         'retainIp': 'cru',
         'assignServiceIpAddress': 'cr',
         'healthState': 'r',
@@ -2219,7 +2222,7 @@ def test_svc_discovery_lb_service(admin_user_client, user_client,
         'metadata': 'cru',
         'selectorLink': 'cru',
         'fqdn': 'r',
-        'publicEndpoints': 'r',
+        'publicEndpoints': 'cru',
         'retainIp': 'cru',
         'assignServiceIpAddress': 'cr',
         'healthState': 'r',
