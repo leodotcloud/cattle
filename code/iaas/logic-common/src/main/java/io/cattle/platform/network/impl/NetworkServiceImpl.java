@@ -22,6 +22,8 @@ import java.util.Map;
 
 import javax.inject.Inject;
 
+import org.apache.commons.lang3.StringUtils;
+
 public class NetworkServiceImpl implements NetworkService {
 
     public static final Map<String, String> MODE_TO_KIND = new HashMap<>();
@@ -103,8 +105,12 @@ public class NetworkServiceImpl implements NetworkService {
     public String getNetworkMode(Map<String, Object> instanceData) {
         Map<String, Object> labels = CollectionUtils.toMap(instanceData.get(InstanceConstants.FIELD_LABELS));
         String mode = ObjectUtils.toString(labels.get(SystemLabels.LABEL_CNI_NETWORK));
+        String instanceDataNetworkMode = ObjectUtils.toString(instanceData.get(DockerInstanceConstants.FIELD_NETWORK_MODE));
 
-        if (mode == null && "true".equals(labels.get(SystemLabels.LABEL_RANCHER_NETWORK))) {
+        if (mode == null &&
+                !NetworkConstants.NETWORK_MODE_HOST.equals(instanceDataNetworkMode) &&
+                !StringUtils.startsWith(instanceDataNetworkMode, NetworkConstants.NETWORK_MODE_CONTAINER) &&
+                "true".equals(labels.get(SystemLabels.LABEL_RANCHER_NETWORK))) {
             mode = NetworkConstants.NETWORK_MODE_MANAGED;
         }
 

@@ -227,10 +227,23 @@ public class ContainerEventCreate extends AbstractDefaultProcessHandler {
         resourceDao.createAndSchedule(instance, makeData());
     }
 
+    private boolean isAllowedOnManagedNetwork(Map<String, Object> inspect) {
+        String inspectNetMode = getInspectNetworkMode(inspect);
+        if (NetworkConstants.NETWORK_MODE_HOST.equals(inspectNetMode) ||
+                StringUtils.startsWith(inspectNetMode, NetworkConstants.NETWORK_MODE_CONTAINER)) {
+            return false;
+        }
+
+        return true;
+    }
+
     private void setLabels(Map<String, Object> inspect, Map<String, Object> data, Instance instance) {
         Map<String, Object> labels = DataAccessor.fieldMap(instance, InstanceConstants.FIELD_LABELS);
         if ("true".equals(labels.get(SystemLabels.LABEL_RANCHER_NETWORK))) {
-            labels.put(SystemLabels.LABEL_CNI_NETWORK, NetworkConstants.NETWORK_MODE_MANAGED);
+            // Don't set for --net=host/container
+            if (isAllowedOnManagedNetwork(inspect)) {
+                labels.put(SystemLabels.LABEL_CNI_NETWORK, NetworkConstants.NETWORK_MODE_MANAGED);
+            }
         }
         labels.putAll(getLabels(inspect, data));
         DataAccessor.setField(instance, InstanceConstants.FIELD_LABELS, labels);
