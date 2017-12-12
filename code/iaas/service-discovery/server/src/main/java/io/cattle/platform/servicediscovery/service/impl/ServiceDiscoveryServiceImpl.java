@@ -6,6 +6,7 @@ import static io.cattle.platform.core.model.tables.ServiceTable.*;
 import static io.cattle.platform.core.model.tables.StackTable.*;
 import static io.cattle.platform.core.model.tables.SubnetTable.*;
 
+import io.cattle.platform.allocator.dao.AllocatorDao;
 import io.cattle.platform.allocator.service.AllocationHelper;
 import io.cattle.platform.configitem.events.ConfigUpdate;
 import io.cattle.platform.configitem.model.Client;
@@ -91,6 +92,9 @@ public class ServiceDiscoveryServiceImpl implements ServiceDiscoveryService {
 
     @Inject
     ObjectProcessManager objectProcessManager;
+    
+    @Inject
+    AllocatorDao allocatorDao;
 
     @Inject
     ServiceExposeMapDao exposeMapDao;
@@ -555,7 +559,13 @@ public class ServiceDiscoveryServiceImpl implements ServiceDiscoveryService {
         List<Service> services = objectManager.find(Service.class, SERVICE.STACK_ID,
                 stack.getId(), SERVICE.REMOVED, null);
 
-        setServiceHealthState(services);
+        List<? extends Host> ActiveHosts = allocatorDao.getActiveHosts(stack.getAccountId());
+        HashSet<String> activeHosts = new HashSet<String>();
+        for(Host host: ActiveHosts){
+            activeHosts.add(host.getId().toString());
+        }
+
+        setServiceHealthState(services, activeHosts);
 
         setStackHealthState(stack);
 
@@ -704,9 +714,9 @@ public class ServiceDiscoveryServiceImpl implements ServiceDiscoveryService {
         }
     }
 
-    protected void setServiceHealthState(final List<? extends Service> services) {
+    protected void setServiceHealthState(final List<? extends Service> services, HashSet<String> activeHosts) {
         for (Service service : services) {
-            String newHealthState = calculateServiceHealthState(service);
+            String newHealthState = calculateServiceHealthState(service, activeHosts);
             String currentHealthState = objectManager.reload(service).getHealthState();
             if (!newHealthState.equalsIgnoreCase(currentHealthState)) {
                 Map<String, Object> fields = new HashMap<>();
@@ -717,7 +727,7 @@ public class ServiceDiscoveryServiceImpl implements ServiceDiscoveryService {
         }
     }
 
-    protected String calculateServiceHealthState(Service service) {
+    protected String calculateServiceHealthState(Service service, HashSet<String> activeHosts) {
         String serviceHealthState = null;
         List<String> supportedKinds = Arrays.asList(
                 ServiceConstants.KIND_SERVICE.toLowerCase(),
@@ -750,6 +760,16 @@ public class ServiceDiscoveryServiceImpl implements ServiceDiscoveryService {
             int startedOnce = 0;
             List<String> runningStates = Arrays.asList(InstanceConstants.STATE_RUNNING);
             for (Instance instance : serviceInstances) {
+                if (isStartOnce(instance)) {
+                    startedOnce++;
+                }
+                if(isGlobal) {
+                    String hostId = DataAccessor.fieldString(instance, InstanceConstants.FIELD_HOST_ID);
+                    if(!activeHosts.contains(hostId)) {
+                        healthyCount++;
+                        continue;
+                    }
+                }
                 String iHS = instance.getHealthState() == null ? HealthcheckConstants.HEALTH_STATE_HEALTHY : instance
                         .getHealthState().toLowerCase();
                 if (runningStates.contains(instance.getState().toLowerCase())) {
@@ -758,10 +778,6 @@ public class ServiceDiscoveryServiceImpl implements ServiceDiscoveryService {
                     } else if (initStates.contains(iHS)) {
                         initCount++;
                     }
-                }
-
-                if (isStartOnce(instance)) {
-                    startedOnce++;
                 }
             }
 
