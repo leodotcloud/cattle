@@ -219,7 +219,7 @@ public class MetaDataInfoDaoImpl extends AbstractJooqDao implements MetaDataInfo
             }
         };
 
-        HostTable host = mapper.add(HOST);
+        HostTable host = mapper.add(HOST, HOST.STATE);
         IpAddressTable hostIpAddress = mapper.add(IP_ADDRESS);
         InstanceHostMapTable instanceHostMap = mapper.add(INSTANCE_HOST_MAP, INSTANCE_HOST_MAP.INSTANCE_ID,
                 INSTANCE_HOST_MAP.HOST_ID);

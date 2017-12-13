@@ -6,6 +6,7 @@ import static io.cattle.platform.core.model.tables.ServiceTable.*;
 import static io.cattle.platform.core.model.tables.StackTable.*;
 import static io.cattle.platform.core.model.tables.SubnetTable.*;
 
+import io.cattle.platform.allocator.dao.AllocatorDao;
 import io.cattle.platform.allocator.service.AllocationHelper;
 import io.cattle.platform.configitem.events.ConfigUpdate;
 import io.cattle.platform.configitem.model.Client;
@@ -74,6 +75,8 @@ import java.util.concurrent.Callable;
 import javax.inject.Inject;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
 public class ServiceDiscoveryServiceImpl implements ServiceDiscoveryService {
 
@@ -91,6 +94,9 @@ public class ServiceDiscoveryServiceImpl implements ServiceDiscoveryService {
 
     @Inject
     ObjectProcessManager objectProcessManager;
+    
+    @Inject
+    AllocatorDao allocatorDao;
 
     @Inject
     ServiceExposeMapDao exposeMapDao;
@@ -555,7 +561,13 @@ public class ServiceDiscoveryServiceImpl implements ServiceDiscoveryService {
         List<Service> services = objectManager.find(Service.class, SERVICE.STACK_ID,
                 stack.getId(), SERVICE.REMOVED, null);
 
-        setServiceHealthState(services);
+        List<? extends Host> ActiveHosts = allocatorDao.getActiveHosts(stack.getAccountId());
+        HashSet<Long> activeHosts = new HashSet<Long>();
+        for(Host host: ActiveHosts){
+            activeHosts.add(host.getId());
+        }
+
+        setServiceHealthState(services, activeHosts);
 
         setStackHealthState(stack);
 
@@ -704,9 +716,9 @@ public class ServiceDiscoveryServiceImpl implements ServiceDiscoveryService {
         }
     }
 
-    protected void setServiceHealthState(final List<? extends Service> services) {
+    protected void setServiceHealthState(final List<? extends Service> services, HashSet<Long> activeHosts) {
         for (Service service : services) {
-            String newHealthState = calculateServiceHealthState(service);
+            String newHealthState = calculateServiceHealthState(service, activeHosts);
             String currentHealthState = objectManager.reload(service).getHealthState();
             if (!newHealthState.equalsIgnoreCase(currentHealthState)) {
                 Map<String, Object> fields = new HashMap<>();
@@ -717,15 +729,33 @@ public class ServiceDiscoveryServiceImpl implements ServiceDiscoveryService {
         }
     }
 
-    protected String calculateServiceHealthState(Service service) {
+    protected String calculateServiceHealthState(Service service, HashSet<Long> activeHosts) {
         String serviceHealthState = null;
         List<String> supportedKinds = Arrays.asList(
                 ServiceConstants.KIND_SERVICE.toLowerCase(),
                 ServiceConstants.KIND_LOAD_BALANCER_SERVICE.toLowerCase());
+        final Log logger = LogFactory.getLog(ServiceDiscoveryServiceImpl.class);
         if (!supportedKinds.contains(service.getKind().toLowerCase())) {
             serviceHealthState = HealthcheckConstants.HEALTH_STATE_HEALTHY;
         } else {
             List<? extends Instance> serviceInstances = exposeMapDao.listServiceManagedInstances(service);
+            logger.info("KINARA ENTER THE FUNCTION");
+            boolean isGlobal = isGlobalService(service);
+            if(isGlobal) {
+                logger.info("KINARA GLOBAL SERVICE "+service.getName());
+                List<Instance> globalServiceInstances = new ArrayList<Instance>();
+                for(Instance instance : serviceInstances) {
+                    Long hostId = DataAccessor.fieldLong(instance, InstanceConstants.FIELD_HOST_ID);
+                    if(activeHosts.contains(hostId)) {
+                        globalServiceInstances.add(instance);
+                    }
+                }
+                serviceInstances = globalServiceInstances;
+                logger.info("KINARA PRINTING GLOBAL INSTANCES");
+                for(Instance instance : serviceInstances) {
+                    logger.info("KINARA instance "+instance.getName()+"   "+instance.getState());
+                }
+            }
             List<String> healthyStates = Arrays.asList(HealthcheckConstants.HEALTH_STATE_HEALTHY,
                     HealthcheckConstants.HEALTH_STATE_UPDATING_HEALTHY);
             List<String> initStates = Arrays.asList(HealthcheckConstants.HEALTH_STATE_INITIALIZING,
@@ -743,7 +773,6 @@ public class ServiceDiscoveryServiceImpl implements ServiceDiscoveryService {
 
             List<String> lcs = ServiceDiscoveryUtil.getServiceLaunchConfigNames(service);
             Integer expectedScale = scale * lcs.size();
-            boolean isGlobal = isGlobalService(service);
             int healthyCount = 0;
             int initCount = 0;
             int instanceCount = serviceInstances.size();
@@ -771,7 +800,11 @@ public class ServiceDiscoveryServiceImpl implements ServiceDiscoveryService {
             }
 
             healthyCount = healthyCount + startedOnce;
-
+            if(isGlobal) {
+            logger.info("KINARA COUNTS");
+            logger.info("KINARA  healthy  "+healthyCount);
+            logger.info("KINARA instanceCount  "+instanceCount);
+            }
             if ((isGlobal && healthyCount >= instanceCount && instanceCount > 0)
                     || (!isGlobal && healthyCount >= expectedScale)) {
                 return HealthcheckConstants.HEALTH_STATE_HEALTHY;
