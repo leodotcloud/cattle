@@ -560,9 +560,9 @@ public class ServiceDiscoveryServiceImpl implements ServiceDiscoveryService {
                 stack.getId(), SERVICE.REMOVED, null);
 
         List<? extends Host> ActiveHosts = allocatorDao.getActiveHosts(stack.getAccountId());
-        HashSet<String> activeHosts = new HashSet<String>();
+        HashSet<Long> activeHosts = new HashSet<Long>();
         for(Host host: ActiveHosts){
-            activeHosts.add(host.getId().toString());
+            activeHosts.add(host.getId());
         }
 
         setServiceHealthState(services, activeHosts);
@@ -714,7 +714,7 @@ public class ServiceDiscoveryServiceImpl implements ServiceDiscoveryService {
         }
     }
 
-    protected void setServiceHealthState(final List<? extends Service> services, HashSet<String> activeHosts) {
+    protected void setServiceHealthState(final List<? extends Service> services, HashSet<Long> activeHosts) {
         for (Service service : services) {
             String newHealthState = calculateServiceHealthState(service, activeHosts);
             String currentHealthState = objectManager.reload(service).getHealthState();
@@ -727,7 +727,7 @@ public class ServiceDiscoveryServiceImpl implements ServiceDiscoveryService {
         }
     }
 
-    protected String calculateServiceHealthState(Service service, HashSet<String> activeHosts) {
+    protected String calculateServiceHealthState(Service service, HashSet<Long> activeHosts) {
         String serviceHealthState = null;
         List<String> supportedKinds = Arrays.asList(
                 ServiceConstants.KIND_SERVICE.toLowerCase(),
@@ -736,6 +736,17 @@ public class ServiceDiscoveryServiceImpl implements ServiceDiscoveryService {
             serviceHealthState = HealthcheckConstants.HEALTH_STATE_HEALTHY;
         } else {
             List<? extends Instance> serviceInstances = exposeMapDao.listServiceManagedInstances(service);
+            boolean isGlobal = isGlobalService(service);
+            if(isGlobal) {
+                List<Instance> globalServiceInstances = new ArrayList<Instance>();
+                for(Instance instance : serviceInstances) {
+                    Long hostId = DataAccessor.fieldLong(instance, InstanceConstants.FIELD_HOST_ID);
+                    if(activeHosts.contains(hostId)) {
+                        globalServiceInstances.add(instance);
+                    }
+                }
+                serviceInstances = globalServiceInstances;
+            }
             List<String> healthyStates = Arrays.asList(HealthcheckConstants.HEALTH_STATE_HEALTHY,
                     HealthcheckConstants.HEALTH_STATE_UPDATING_HEALTHY);
             List<String> initStates = Arrays.asList(HealthcheckConstants.HEALTH_STATE_INITIALIZING,
@@ -753,23 +764,12 @@ public class ServiceDiscoveryServiceImpl implements ServiceDiscoveryService {
 
             List<String> lcs = ServiceDiscoveryUtil.getServiceLaunchConfigNames(service);
             Integer expectedScale = scale * lcs.size();
-            boolean isGlobal = isGlobalService(service);
             int healthyCount = 0;
             int initCount = 0;
             int instanceCount = serviceInstances.size();
             int startedOnce = 0;
             List<String> runningStates = Arrays.asList(InstanceConstants.STATE_RUNNING);
             for (Instance instance : serviceInstances) {
-                if (isStartOnce(instance)) {
-                    startedOnce++;
-                }
-                if(isGlobal) {
-                    String hostId = DataAccessor.fieldString(instance, InstanceConstants.FIELD_HOST_ID);
-                    if(!activeHosts.contains(hostId)) {
-                        healthyCount++;
-                        continue;
-                    }
-                }
                 String iHS = instance.getHealthState() == null ? HealthcheckConstants.HEALTH_STATE_HEALTHY : instance
                         .getHealthState().toLowerCase();
                 if (runningStates.contains(instance.getState().toLowerCase())) {
@@ -778,6 +778,10 @@ public class ServiceDiscoveryServiceImpl implements ServiceDiscoveryService {
                     } else if (initStates.contains(iHS)) {
                         initCount++;
                     }
+                }
+
+                if (isStartOnce(instance)) {
+                    startedOnce++;
                 }
             }
 
