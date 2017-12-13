@@ -75,6 +75,8 @@ import java.util.concurrent.Callable;
 import javax.inject.Inject;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
 public class ServiceDiscoveryServiceImpl implements ServiceDiscoveryService {
 
@@ -732,12 +734,15 @@ public class ServiceDiscoveryServiceImpl implements ServiceDiscoveryService {
         List<String> supportedKinds = Arrays.asList(
                 ServiceConstants.KIND_SERVICE.toLowerCase(),
                 ServiceConstants.KIND_LOAD_BALANCER_SERVICE.toLowerCase());
+        final Log logger = LogFactory.getLog(ServiceDiscoveryServiceImpl.class);
         if (!supportedKinds.contains(service.getKind().toLowerCase())) {
             serviceHealthState = HealthcheckConstants.HEALTH_STATE_HEALTHY;
         } else {
             List<? extends Instance> serviceInstances = exposeMapDao.listServiceManagedInstances(service);
+            logger.info("KINARA ENTER THE FUNCTION");
             boolean isGlobal = isGlobalService(service);
             if(isGlobal) {
+                logger.info("KINARA GLOBAL SERVICE "+service.getName());
                 List<Instance> globalServiceInstances = new ArrayList<Instance>();
                 for(Instance instance : serviceInstances) {
                     Long hostId = DataAccessor.fieldLong(instance, InstanceConstants.FIELD_HOST_ID);
@@ -746,6 +751,10 @@ public class ServiceDiscoveryServiceImpl implements ServiceDiscoveryService {
                     }
                 }
                 serviceInstances = globalServiceInstances;
+                logger.info("KINARA PRINTING GLOBAL INSTANCES");
+                for(Instance instance : serviceInstances) {
+                    logger.info("KINARA instance "+instance.getName()+"   "+instance.getState());
+                }
             }
             List<String> healthyStates = Arrays.asList(HealthcheckConstants.HEALTH_STATE_HEALTHY,
                     HealthcheckConstants.HEALTH_STATE_UPDATING_HEALTHY);
@@ -791,7 +800,11 @@ public class ServiceDiscoveryServiceImpl implements ServiceDiscoveryService {
             }
 
             healthyCount = healthyCount + startedOnce;
-
+            if(isGlobal) {
+            logger.info("KINARA COUNTS");
+            logger.info("KINARA  healthy  "+healthyCount);
+            logger.info("KINARA instanceCount  "+instanceCount);
+            }
             if ((isGlobal && healthyCount >= instanceCount && instanceCount > 0)
                     || (!isGlobal && healthyCount >= expectedScale)) {
                 return HealthcheckConstants.HEALTH_STATE_HEALTHY;
